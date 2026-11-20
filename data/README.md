@@ -1,163 +1,66 @@
-# E-Commerce Product Analytics
+# Data Setup
 
-An end-to-end Product Analytics project based on the **Olist Brazilian E-Commerce Public Dataset**.
+## Source
 
-The goal of this project is to analyze customer behavior, product performance, retention, revenue, and customer experience, and translate data into actionable product and business recommendations.
+This project uses the [Olist Brazilian E-Commerce Public Dataset on Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce).
 
----
+Download the dataset from the source page and keep the original CSV files unchanged. The raw files are intentionally excluded from version control.
 
-## 🎯 Project Objective
+## Source Files
 
-This project simulates the work of a Product Data Analyst at an e-commerce company.
+The dataset is expected to contain these nine CSV files:
 
-The main goal is to answer business and product questions such as:
+| CSV file | Description |
+|---|---|
+| `olist_orders_dataset.csv` | Order status and lifecycle timestamps |
+| `olist_order_items_dataset.csv` | Items, sellers, item prices and freight values |
+| `olist_customers_dataset.csv` | Customer records and unique customer identifiers |
+| `olist_products_dataset.csv` | Product attributes and source category names |
+| `olist_order_payments_dataset.csv` | Payment records, methods, values and installments |
+| `olist_order_reviews_dataset.csv` | Customer review records and scores |
+| `olist_sellers_dataset.csv` | Seller attributes |
+| `olist_geolocation_dataset.csv` | Postal-code prefix coordinates |
+| `product_category_name_translation.csv` | Source category to English category mapping |
 
-* What factors are associated with customer satisfaction?
-* How does delivery performance affect customer experience?
-* Which product categories and sellers perform best?
-* How many customers make repeat purchases?
-* What does customer retention look like?
-* Which customer segments generate the most value?
-* Where are the biggest opportunities for product and business improvement?
+## Local Directory
 
----
-
-## 📊 Dataset
-
-**Olist Brazilian E-Commerce Public Dataset**
-
-The dataset contains approximately 100,000 orders from a Brazilian e-commerce platform and includes information about:
-
-* Customers
-* Orders
-* Products
-* Sellers
-* Payments
-* Reviews
-* Order items
-* Geolocation
-* Product categories
-
-The raw dataset is not included in this repository.
-
----
-
-## 🧰 Tools & Technologies
-
-* **SQL** — Data querying and product/business analysis
-* **Python** — Data cleaning, exploratory data analysis and statistical analysis
-* **Pandas / NumPy** — Data manipulation
-* **Power BI** — Interactive dashboards and data visualization
-* **Git / GitHub** — Version control and documentation
-* **Kaggle** — Public data analysis notebook
-
----
-
-## 🔍 Analysis Areas
-
-### Product Metrics
-
-* Revenue
-* Orders
-* Average Order Value (AOV)
-* Customer metrics
-* Product performance
-* Customer satisfaction
-
-### Customer Analytics
-
-* Customer segmentation
-* Repeat purchase behavior
-* Cohort analysis
-* Retention
-* RFM analysis
-
-### Customer Experience
-
-* Delivery time
-* Late deliveries
-* Review scores
-* Relationship between operational performance and customer satisfaction
-
-### Product & Business Analytics
-
-* Funnel analysis
-* KPI definition
-* Feature/product performance
-* Business opportunity identification
-* Data-driven recommendations
-
-### Experimentation
-
-A hypothetical A/B testing framework is designed for an e-commerce product, including:
-
-* Hypothesis
-* Control and treatment groups
-* Primary KPI
-* Guardrail metrics
-* Success criteria
-
----
-
-## 📁 Project Structure
+After downloading, place the original files in:
 
 ```text
-ecommerce-product-analytics/
-│
-├── README.md
-│
-├── docs/
-│   ├── 01_business_understanding.md
-│   ├── 02_dataset_dictionary.md
-│   ├── 03_product_metrics.md
-│   ├── 04_data_model.md
-│   └── 05_experimentation.md
-│
-├── sql/
-│
-├── python/
-│
-├── powerbi/
-│
-├── reports/
-│
-├── images/
-│
-└── data/
-    └── README.md
+data/
+└── raw/
+    ├── olist_orders_dataset.csv
+    ├── olist_order_items_dataset.csv
+    ├── olist_customers_dataset.csv
+    ├── olist_products_dataset.csv
+    ├── olist_order_payments_dataset.csv
+    ├── olist_order_reviews_dataset.csv
+    ├── olist_sellers_dataset.csv
+    ├── olist_geolocation_dataset.csv
+    └── product_category_name_translation.csv
 ```
 
----
+Do not rename or edit the source files unless a transformation is explicitly documented. Keep cleaned or derived data separate from the original files.
 
-## 📈 Key Deliverables
+## MySQL Import
 
-The final project will include:
+Import the nine CSV files into a dedicated MySQL database. The original CSV filenames are used as reference names in the documentation; table names may differ depending on the import method.
 
-* Business and product problem definition
-* Product KPI framework
-* Data model
-* SQL analysis
-* Python EDA
-* Customer cohort and retention analysis
-* Customer segmentation
-* Customer experience analysis
-* Statistical analysis
-* A/B testing proposal
-* Power BI dashboards
-* Final business recommendations
+After import:
 
----
+1. Select the intended database.
+2. List the imported tables.
+3. Inspect each table's columns and data types.
+4. Record row counts.
+5. Validate primary-key uniqueness and foreign-key coverage.
+6. Confirm date/time and numeric columns were imported with suitable types.
 
-## 🔗 Project Links
+The SQL scripts will use the actual table and column names confirmed during this validation step. Do not assume that an import tool preserved the expected names or inferred data types correctly.
 
-**Kaggle Notebook:** Coming soon
+## Data Handling
 
-**Power BI Dashboard:** Coming soon
-
----
-
-## 👩‍💻 About
-
-This project was created as part of a transition toward **Product Analytics / Product Data Analytics**, combining a background in Software Engineering, Product Management, Customer Experience, Business Analysis, and Data Analysis.
-
-The focus is on connecting technical data analysis with real product and business decisions.
+- Do not commit raw or processed source datasets.
+- Do not overwrite the original CSV files.
+- Document any exclusions, type conversions, deduplication or other transformations.
+- Keep source data, transformed data and analytical outputs logically separate.
+- Check the dataset provider's current terms before redistributing any source data.
