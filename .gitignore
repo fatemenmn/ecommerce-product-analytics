@@ -1,7 +1,6 @@
 # Local source data (download separately; do not commit raw datasets)
 data/raw/
 data/processed/
-*.csv
 *.parquet
 
 # Python
