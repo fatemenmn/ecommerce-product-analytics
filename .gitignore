@@ -3,6 +3,10 @@ data/raw/
 data/processed/
 *.parquet
 
+# Olist source CSVs (download from Kaggle; never commit raw data)
+olist_*_dataset.csv
+product_category_name_translation.csv
+
 # Python
 __pycache__/
 *.py[cod]
