@@ -57,6 +57,100 @@ After import:
 
 The SQL scripts will use the actual table and column names confirmed during this validation step. Do not assume that an import tool preserved the expected names or inferred data types correctly.
 
+## Local MySQL Server (portable, no admin)
+
+A MySQL 8.0 server was installed in portable form at `C:\Users\User\mysql`. It is not
+registered as a Windows service and does not require administrator rights.
+
+| Item | Value |
+|---|---|
+| Server | MySQL Community Server 8.0.44 (x64 ZIP) |
+| Binaries | `C:\Users\User\mysql\mysql-8.0.44-winx64\bin` |
+| Config | `C:\Users\User\mysql\my.ini` |
+| Data | `C:\Users\User\mysql\data` |
+| Endpoint | `127.0.0.1:3306` |
+| Login | user `root`, empty password (local development only) |
+| Database | `olist` |
+| Log | `C:\Users\User\mysql\mysql-error.log` |
+
+Start and stop the server:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start-mysql.ps1
+powershell -ExecutionPolicy Bypass -File scripts\stop-mysql.ps1
+```
+
+### Loading the CSVs
+
+`LOAD DATA LOCAL INFILE` needs the server `local_infile` setting and a `FILE`
+privilege. The project instead loads CSVs through the driver, which works with a
+plain user account:
+
+```powershell
+# create the database + all nine tables, then load every CSV in the project root
+python python\load_mysql.py --create --load all
+
+# or load one table
+python python\load_mysql.py --load orders
+
+# confirm what is loaded
+python python\load_mysql.py --tables
+```
+
+Loaded tables and row counts (verified against the source CSVs):
+
+| Table | CSV | Rows |
+|---|---|---|
+| `customers` | `olist_customers_dataset.csv` | 99,441 |
+| `orders` | `olist_orders_dataset.csv` | 99,441 |
+| `order_items` | `olist_order_items_dataset.csv` | 112,650 |
+| `order_payments` | `olist_order_payments_dataset.csv` | 103,886 |
+| `order_reviews` | `olist_order_reviews_dataset.csv` | 99,224 |
+| `products` | `olist_products_dataset.csv` | 32,951 |
+| `sellers` | `olist_sellers_dataset.csv` | 3,095 |
+| `geolocation` | `olist_geolocation_dataset.csv` | 1,000,163 |
+| `product_category_name_translation` | `product_category_name_translation.csv` | 71 |
+
+Connection details come from `.env` (gitignored) or from env vars, and can also be
+passed as flags:
+
+```powershell
+python python\load_mysql.py --host 127.0.0.1 --port 3306 --user root --password "" --database olist
+```
+
+### SQL scripts
+
+| File | Purpose |
+|---|---|
+| `sql/00_create_schema.sql` | Database plus all nine table definitions |
+| `sql/01_load_customers.sql` | Server-side `LOAD DATA` variant for customers |
+| `sql/customers_queries.sql` | Customer-only analytical queries |
+| `sql/03_example_queries.sql` | 18 cross-table example queries (revenue, delivery, reviews, sellers) |
+
+Run a script without opening a client:
+
+```powershell
+python python\load_mysql.py -f sql\03_example_queries.sql
+python python\load_mysql.py -f sql\03_example_queries.sql --out reports\example_results.csv
+```
+
+Or paste it straight into MySQL Workbench after connecting to `127.0.0.1:3306`.
+
+**Notes on the import**
+
+* `customer_zip_code_prefix` and `seller_zip_code_prefix` are `CHAR(5)` so leading
+  zeros survive, e.g. `'01151'`.
+* `product_name_lenght` and `product_description_lenght` keep the dataset's spelling
+  so CSV columns map 1:1 to table columns.
+* `order_reviews.review_id` is not unique in the source (814 duplicate ids), so the
+  table has indexes but no primary key.
+* `product_category_name_translation.csv` starts with a UTF-8 BOM; the loader reads
+  with `utf-8-sig` to strip it.
+* `order_items` is the grain for item revenue; `order_payments` is the grain for
+  payment value. Summing both in one query double counts money.
+
+
+
 ## Data Handling
 
 - Do not commit raw or processed source datasets.
