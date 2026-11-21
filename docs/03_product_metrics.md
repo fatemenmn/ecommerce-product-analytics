@@ -901,6 +901,60 @@ Where useful, report both mean and median to reveal skewness.
 - Delivered GMV is not net revenue or profit.
 - Geographic straight-line distance is not actual delivery route distance.
 
+### 9.7 Review Score Selection for Order-Level Analysis
+
+**Definition:**
+
+When a metric is calculated at order grain, each order carries one review score chosen by the **latest valid answered score** rule: the score from the review row with the most recent `review_answer_timestamp`, considering only rows with a score from 1 to 5 and a non-missing answer timestamp.
+
+**Selection logic:**
+
+1. Keep review rows where `review_score BETWEEN 1 AND 5` and `review_answer_timestamp IS NOT NULL`.
+2. Rank the remaining rows per `order_id` by `review_answer_timestamp` descending.
+3. Keep the first row. `review_id` descending breaks any remaining tie deterministically.
+4. Orders with no qualifying row receive a NULL order-level score and are reported as `no_review`.
+
+```sql
+SELECT order_id, review_score, review_answer_timestamp
+FROM (
+    SELECT order_id,
+           review_score,
+           review_answer_timestamp,
+           ROW_NUMBER() OVER (
+               PARTITION BY order_id
+               ORDER BY review_answer_timestamp DESC, review_id DESC
+           ) AS rn
+    FROM order_reviews
+    WHERE review_score BETWEEN 1 AND 5
+      AND review_answer_timestamp IS NOT NULL
+) AS ranked
+WHERE rn = 1;
+```
+
+**Source table:**
+
+- `olist_order_reviews_dataset`
+
+**Population:**
+
+Orders that have at least one review row with a score from 1 to 5 and a non-missing answer timestamp. Orders without such a row keep a missing score and are excluded from order-level score averages while remaining visible in the order base.
+
+**Validation evidence:**
+
+- 202 orders contain more than one distinct review score.
+- 0 of those orders have a missing `review_answer_timestamp`.
+- 0 of those orders have different scores sharing their latest answer timestamp.
+
+The rule therefore resolves every conflicting order without a tie in the current dataset, so no secondary preference for first, minimum, or mean score is needed.
+
+**Scope:**
+
+- Applies to order-level analysis: average score by delivery bucket, score by category at order grain, and order-level measures in Power BI.
+- Does not replace the review-record definitions in 5.5 Average Review Score and 5.6 Low Review Score Rate. Those remain record-level metrics and must keep stating their grain.
+- `sql/order_level_dataset.sql` exposes the selected value as `latest_review_score` and the outcome as `order_review_status`.
+
+**If the rule changes:** rerun the validation queries in [Data Validation Findings](data_validation_findings.md) and record the effect on the delivery and review comparison before adopting a different rule.
+
 ---
 
 # 10. KPI-to-Business Question Mapping
