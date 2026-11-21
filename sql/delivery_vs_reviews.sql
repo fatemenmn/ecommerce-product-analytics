@@ -155,6 +155,10 @@ by_timing AS (
             100.0 * SUM(latest_review_score <= 2)
             / NULLIF(SUM(latest_review_score IS NOT NULL), 0), 2
         )                                                                 AS low_score_pct,
+        -- Unrounded rate: the gap below is computed from this value and
+        -- rounded exactly once, so it is not a difference of rounded rates.
+        100.0 * SUM(latest_review_score <= 2)
+            / NULLIF(SUM(latest_review_score IS NOT NULL), 0)             AS low_score_rate_raw,
         SUM(delivery_days = 0)                                            AS delivered_same_day_as_purchase,
         SUM(delay_days = 0)                                               AS delivered_on_estimated_date
     FROM classified
@@ -167,8 +171,12 @@ SELECT
     review_coverage_pct,
     avg_review_score,
     low_score_pct,
-    ROUND(MAX(low_score_pct) OVER () - MIN(low_score_pct) OVER (), 2)
-        AS low_score_gap_pp,
+    -- Late rate minus on-time rate, in percentage points, before rounding.
+    ROUND(
+        MAX(CASE WHEN delivery_timing = 'late'    THEN low_score_rate_raw END) OVER ()
+      - MAX(CASE WHEN delivery_timing = 'on_time' THEN low_score_rate_raw END) OVER (),
+        2
+    ) AS low_score_gap_pp,
     delivered_same_day_as_purchase,
     delivered_on_estimated_date
 FROM by_timing
