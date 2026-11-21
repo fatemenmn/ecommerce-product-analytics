@@ -43,7 +43,7 @@ Use `orders` as the base for order-level metrics. Summarize each related table t
 
 ## Next checks
 
-Three questions remain open and must be resolved before monetary and review KPIs are finalized. Each check is read-only and runs against the same `olist` connection as [data_exploration.sql](../sql/data_exploration.sql).
+All three checks are resolved against the live `olist` schema. Each is read-only and runs against the same connection as [data_exploration.sql](../sql/data_exploration.sql). The SQL is retained so every result can be reproduced.
 
 ### 1. Status of the 775 orders without items
 
@@ -56,7 +56,18 @@ GROUP BY o.order_status
 ORDER BY orders DESC;
 ```
 
-The result decides whether item-based and monetary KPIs should be restricted to orders that have items. If the unlinked orders sit almost entirely in terminal non-sale statuses such as `canceled` and `unavailable`, excluding them from revenue measures is defensible and should be stated in the metric eligibility rules. Any `delivered` order without items is a capture defect rather than a status effect and must be disclosed, not silently dropped. Keep all 775 orders in order-count KPIs so order totals continue to reconcile.
+**Result (confirmed).**
+
+| `order_status` | Orders |
+| --- | ---: |
+| `unavailable` | 603 |
+| `canceled` | 164 |
+| `created` | 5 |
+| `invoiced` | 2 |
+| `shipped` | 1 |
+| **Total** | **775** |
+
+No `delivered` order lacks items, so there is no capture defect among fulfilled orders. The 767 `unavailable` and `canceled` orders account for 99.0% of the group. Excluding these orders from item-based revenue is defensible, and only the single `shipped` order could still produce items later. All 775 stay in order-count KPIs so order totals continue to reconcile.
 
 ### 2. The single order without a payment
 
@@ -73,7 +84,13 @@ LEFT JOIN (
 WHERE p.order_id IS NULL;
 ```
 
-Compare `item_value` with the absence of any payment row. An order carrying item value but no payment record cannot be reconciled to payment-based measures and should be excluded from them with a documented note. An order with neither items nor payment is an empty record that can leave monetary KPIs while remaining in the order base. Either way, payment totals will not equal item revenue, so the two must never be presented as the same measure.
+**Result (confirmed).**
+
+| `order_id` | `order_status` | `order_purchase_timestamp` | `items` | `item_value` |
+| --- | --- | --- | ---: | ---: |
+| `bfbd0f9bdef84302105ad712db648a6c` | `delivered` | 2016-09-15 12:16:38 | 3 | 134.97 |
+
+The order carries merchandise value with no payment row at all, so it is the item-value-without-payment case. It is excluded from payment-based measures and recorded as an exclusion, while remaining in delivered-order and item-revenue counts. It also accounts for the entire delivered revenue of 2016-09, which is why that month shows a single order worth R$ 134.97.
 
 ### 3. How to handle conflicting review scores
 
@@ -90,7 +107,46 @@ HAVING COUNT(DISTINCT r.review_score) > 1
 ORDER BY distinct_scores DESC, review_rows DESC;
 ```
 
-Pick one rule for the 202 orders whose review rows disagree, apply it everywhere, and record it in the metric definitions: the latest review by `review_answer_timestamp`, the first review, the minimum score, or the rounded mean. Then confirm the choice does not change the conclusion by recomputing average score per delivery bucket under each candidate rule. The rule must be identical in the SQL analysis and the Power BI model, otherwise the same KPI will report two different numbers.
+**Result (confirmed).** The counts behind the rule come from this aggregate query:
+
+```sql
+WITH conflicting AS (
+    SELECT order_id
+    FROM olist.order_reviews
+    GROUP BY order_id
+    HAVING COUNT(DISTINCT review_score) > 1
+),
+latest AS (
+    SELECT r.order_id, MAX(r.review_answer_timestamp) AS last_ts
+    FROM olist.order_reviews AS r
+    JOIN conflicting AS c ON c.order_id = r.order_id
+    GROUP BY r.order_id
+),
+tied_latest AS (
+    SELECT r.order_id
+    FROM olist.order_reviews AS r
+    JOIN latest AS l ON l.order_id = r.order_id
+                    AND r.review_answer_timestamp = l.last_ts
+    GROUP BY r.order_id
+    HAVING COUNT(DISTINCT r.review_score) > 1
+),
+no_answer AS (
+    SELECT DISTINCT r.order_id
+    FROM olist.order_reviews AS r
+    JOIN conflicting AS c ON c.order_id = r.order_id
+    WHERE r.review_answer_timestamp IS NULL
+)
+SELECT
+    (SELECT COUNT(*) FROM conflicting) AS conflicting_orders,
+    (SELECT COUNT(*) FROM no_answer)   AS with_no_answer_timestamp,
+    (SELECT COUNT(*) FROM tied_latest) AS with_differing_scores_at_latest_ts;
+```
+
+| Conflicting orders | No answer timestamp | Differing scores at latest timestamp |
+| ---: | ---: | ---: |
+| 202 | 0 | 0 |
+
+The latest valid answered score rule therefore resolves all 202 orders without a tie: no order needs a fallback for a missing answer timestamp, and no order has two different scores sharing its most recent answer timestamp. The rule is defined in [Product Metrics](03_product_metrics.md#97-review-score-selection-for-order-level-analysis) and applied in `sql/order_level_dataset.sql`.
 
 Reconciling the remaining eight MySQL row counts with the original CSVs stays outstanding but sits outside these three checks.
 
