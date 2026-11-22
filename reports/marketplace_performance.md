@@ -36,10 +36,13 @@ Reporting month is the order purchase month. Amounts are in BRL.
 **Partial months.** September 2016 and December 2016 contain 4 and 1 placed orders, and
 September 2018 and October 2018 contain 16 and 4. These sit at the edges of the observed
 window (first purchase 2016-09-04, last 2018-10-17), so their rates are not comparable
-with full months: the two 2018 months have no delivered orders at all, which is why AOV is
-NULL and the cancellation rate reads 93.75% and 100.00%. November 2016 has no orders and
-therefore no row. Trends and month-to-month comparisons below use the 20 full months from
-2017-01 to 2018-08.
+with full months: the two 2018 months have no delivered orders at all, so AOV is NULL.
+November 2016 has no orders and therefore no row. The cause of the high cancellation rates
+in September and October 2018 is not determined by this output and is left undetermined.
+
+All observed months are kept in the table above. The findings below use the selected trend
+period, **January 2017 through August 2018** (20 full months), which excludes the partial
+edge months at both ends of the window.
 
 ## KPI definitions and denominators
 
@@ -79,22 +82,17 @@ Overall figures derived from the reconciled totals: AOV **R$ 137.04**
 
 ## Findings
 
-**Volume drove growth; basket size stayed flat.** Delivered GMV rose from R$ 111,798 in
-January 2017 to R$ 924,645 in January 2018, while AOV moved only between R$ 124.38 and
-R$ 152.17 across the full months and settled at R$ 137.04 overall. Growth therefore came
-from more orders, not from larger baskets, which makes order acquisition and repeat
-purchasing the levers that matter for revenue.
+**Growth came from order volume, not basket size.** Delivered orders rose from 750 in
+January 2017 to 7,069 in January 2018, a 9.4-fold increase, while AOV fell from R$ 149.06 to
+R$ 130.80. Delivered GMV still grew, from R$ 111,798.36 to R$ 924,645.00, because the rise
+in delivered orders was far larger than the fall in average order value.
 
 **November 2017 is the clear peak.** With 7,544 placed orders and R$ 987,765.37 in delivered
 GMV, it is the largest month and about 7.5% of all delivered GMV, roughly 1.6 times the
-September 2017 level. Cancellation stayed at 0.49% that month, so the peak was absorbed
-without a visible operational penalty in this metric, although delivery timing is the better
-test for peak-period strain.
+September 2017 level. Its cancellation rate was 0.49%.
 
-Cancellation is low and stable overall (0.63%), ranging from 0.19% in December 2017 to
-1.29% in August 2018 among full months. That range is narrow enough that cancellations are
-not a material driver of the revenue trend, but the August 2018 uptick is worth monitoring
-rather than treating as structural.
+Across the selected trend period the cancellation rate stayed between 0.19% in December 2017
+and 1.29% in August 2018, with 0.63% overall.
 
 ## Reproduce
 
