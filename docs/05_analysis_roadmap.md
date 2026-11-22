@@ -127,15 +127,15 @@ A deliverable is considered complete only when it meets the relevant criteria:
 | Area | Status |
 |---|---|
 | Business understanding | Documented |
-| Dataset dictionary | Documented; source schema to be validated after import |
-| KPI framework | Defined; calculations to be validated against source data |
+| Dataset dictionary | Documented; source schema validated against the imported MySQL tables |
+| KPI framework | Defined; delivery-delay and review-score rules validated against source data |
 | Analytical architecture | Defined |
 | Analysis roadmap | Defined |
-| SQL data validation | Pending execution against MySQL |
-| Core SQL analysis | Pending |
+| SQL data validation | Complete; findings recorded in `docs/data_validation_findings.md` |
+| Core SQL analysis | Two analyses complete: delivery delay vs review scores, and monthly marketplace performance |
 | Python EDA | Pending |
 | Power BI model and dashboard | Pending |
-| Final insights and recommendations | Pending validated findings |
+| Final insights and recommendations | Pending; two validated SQL analyses available as supporting evidence |
 
 ## 7. Definition of Done
 
