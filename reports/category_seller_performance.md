@@ -143,5 +143,6 @@ delivered merchandise value therefore comes from one seller in twenty, while the
 ## Reproduce
 
 Run [category_seller_performance.sql](../sql/category_seller_performance.sql) against the MySQL
-`olist` database. The script returns the category table, the full ranked seller table, the
-concentration summary, and the QA reconciliation block in that order.
+`olist` database. The script returns the category table, the category concentration summary, the
+full ranked seller table, the seller concentration summary, and the QA reconciliation block in
+that order.

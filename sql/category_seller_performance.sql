@@ -64,7 +64,62 @@ GROUP BY category_name
 ORDER BY SUM(price) DESC, category_name;
 
 -- ------------------------------------------------------------
--- Result 2 — Delivered GMV by seller, ranked by delivered GMV
+-- Result 2 — Category concentration
+-- Top 5 and top 10 category shares, calculated from unrounded GMV and
+-- rounded once. Ranking ties are broken by category_name so the cut is
+-- deterministic. The denominator is total delivered GMV.
+-- ------------------------------------------------------------
+WITH delivered_items AS (
+    SELECT oi.order_id,
+           oi.order_item_id,
+           oi.product_id,
+           oi.price
+    FROM olist.order_items AS oi
+    JOIN olist.orders AS o ON o.order_id = oi.order_id
+    WHERE o.order_status = 'delivered'
+),
+categorized AS (
+    SELECT di.order_id,
+           di.order_item_id,
+           di.price,
+           CASE
+               WHEN p.product_id IS NULL THEN '(missing product record)'
+               WHEN p.product_category_name IS NULL THEN '(no category)'
+               ELSE COALESCE(t.product_category_name_english,
+                             p.product_category_name)
+           END AS category_name
+    FROM delivered_items AS di
+    LEFT JOIN olist.products AS p ON p.product_id = di.product_id
+    LEFT JOIN olist.product_category_name_translation AS t
+           ON t.product_category_name = p.product_category_name
+),
+category_agg AS (
+    SELECT category_name,
+           SUM(price) AS delivered_gmv_brl
+    FROM categorized
+    GROUP BY category_name
+),
+ranked AS (
+    SELECT category_name,
+           delivered_gmv_brl,
+           ROW_NUMBER() OVER (ORDER BY delivered_gmv_brl DESC, category_name)
+               AS category_rank,
+           COUNT(*) OVER () AS category_count
+    FROM category_agg
+)
+SELECT
+    MAX(category_count)                                         AS categories_with_delivered_items,
+    ROUND(100.0 * SUM(CASE WHEN category_rank <= 5
+                           THEN delivered_gmv_brl END)
+          / SUM(delivered_gmv_brl), 2)                          AS top5_category_gmv_share_pct,
+    ROUND(100.0 * SUM(CASE WHEN category_rank <= 10
+                           THEN delivered_gmv_brl END)
+          / SUM(delivered_gmv_brl), 2)                          AS top10_category_gmv_share_pct,
+    ROUND(SUM(delivered_gmv_brl), 2)                            AS total_delivered_gmv_brl
+FROM ranked;
+
+-- ------------------------------------------------------------
+-- Result 3 — Delivered GMV by seller, ranked by delivered GMV
 -- Ties are broken by seller_id so the ranking is deterministic.
 -- ------------------------------------------------------------
 WITH delivered_items AS (
@@ -105,7 +160,7 @@ FROM seller_agg
 ORDER BY seller_rank;
 
 -- ------------------------------------------------------------
--- Result 3 — Seller concentration
+-- Result 4 — Seller concentration
 -- Top 5% uses CEIL(0.05 × sellers with delivered items), rounded up.
 -- The denominator for every share is total delivered GMV.
 -- ------------------------------------------------------------
@@ -151,7 +206,7 @@ CROSS JOIN cutoffs AS c
 GROUP BY c.sellers_with_delivered_items, c.top5pct_seller_count;
 
 -- ------------------------------------------------------------
--- Result 4 — QA and reconciliation
+-- Result 5 — QA and reconciliation
 -- ------------------------------------------------------------
 WITH delivered_items AS (
     SELECT oi.order_id,
