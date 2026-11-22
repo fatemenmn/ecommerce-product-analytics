@@ -122,8 +122,10 @@ cohorts AS (
            first_purchase_ts,
            DATE_FORMAT(first_purchase_ts, '%Y-%m') AS first_purchase_month,
            second_purchase_ts,
+           -- Inclusive, exact deadline: the second purchase counts when it is
+           -- no later than the same clock time 90 days after the first.
            CASE WHEN second_purchase_ts IS NOT NULL
-                     AND DATEDIFF(second_purchase_ts, first_purchase_ts) <= 90
+                     AND second_purchase_ts <= TIMESTAMPADD(DAY, 90, first_purchase_ts)
                 THEN 1 ELSE 0 END AS returned_within_90d
     FROM buyer_history
 ),
@@ -178,10 +180,17 @@ cohorts AS (
     SELECT customer_unique_id,
            first_purchase_ts,
            DATE_FORMAT(first_purchase_ts, '%Y-%m') AS first_purchase_month,
+           second_purchase_ts,
            CASE WHEN second_purchase_ts IS NOT NULL
-                     AND DATEDIFF(second_purchase_ts, first_purchase_ts) <= 90
+                     AND second_purchase_ts <= TIMESTAMPADD(DAY, 90, first_purchase_ts)
                 THEN 1 ELSE 0 END AS returned_within_90d
     FROM buyer_history
+),
+eligible_cohorts AS (
+    SELECT *
+    FROM cohorts
+    WHERE first_purchase_month BETWEEN '2017-01' AND '2018-08'
+      AND first_purchase_ts <= TIMESTAMPADD(DAY, -90, '2018-08-31 23:59:59')
 )
 SELECT
     (SELECT COUNT(*) FROM olist.orders
@@ -202,4 +211,32 @@ SELECT
     (SELECT COUNT(*) FROM buyer_history)                       AS distinct_buyers_cte,
     (SELECT COUNT(*) FROM buyer_history
       WHERE delivered_orders >= 2)                             AS repeat_buyers_cte,
-    (SELECT SUM(delivered_orders) FROM buyer_history)          AS orders_accounted_for;
+    (SELECT SUM(delivered_orders) FROM buyer_history)          AS orders_accounted_for,
+    -- 90-day cohort figures, recomputed here to confirm the cohort query.
+    (SELECT COUNT(*) FROM eligible_cohorts)                    AS cohort_eligible_buyers,
+    (SELECT SUM(returned_within_90d) FROM eligible_cohorts)    AS cohort_second_within_90d,
+    (SELECT ROUND(100.0 * SUM(returned_within_90d) / COUNT(*), 2)
+       FROM eligible_cohorts)                                  AS cohort_rate_90d_pct,
+    -- Impact of the exact timestamp deadline versus a calendar-day difference:
+    -- buyers on day 90 whose second purchase fell later in the clock than the
+    -- first purchase are excluded by the exact rule but counted by DATEDIFF.
+    (SELECT COUNT(*) FROM eligible_cohorts
+      WHERE second_purchase_ts IS NOT NULL
+        AND DATEDIFF(second_purchase_ts, first_purchase_ts) <= 90) AS calendar_day_rule_second_90d,
+    (SELECT COUNT(*) FROM eligible_cohorts
+      WHERE returned_within_90d = 0
+        AND second_purchase_ts IS NOT NULL
+        AND DATEDIFF(second_purchase_ts, first_purchase_ts) = 90)   AS excluded_by_exact_deadline;
+
+-- ------------------------------------------------------------
+-- Result 4 — Boundary check for the inclusive 90-day deadline
+-- The deadline is first_purchase + 90 days. A purchase exactly at the
+-- deadline must count; one second later must not.
+-- ------------------------------------------------------------
+SELECT 'exact deadline (included)' AS boundary_case,
+       TIMESTAMP('2018-01-03 10:00:00')
+           <= TIMESTAMPADD(DAY, 90, TIMESTAMP('2017-10-05 10:00:00')) AS counted_within_90d
+UNION ALL
+SELECT 'one second later (excluded)',
+       TIMESTAMPADD(SECOND, 1, TIMESTAMP('2018-01-03 10:00:00'))
+           <= TIMESTAMPADD(DAY, 90, TIMESTAMP('2017-10-05 10:00:00'));
