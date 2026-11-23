@@ -59,6 +59,10 @@ appears in more than one pair: **509 orders span multiple seller states**, produ
 order/state-pair rows for 96,478 orders** across **412 distinct pairs**. Pair counts therefore
 overlap and must not be summed.
 
+The 516 extra rows reconcile exactly to those orders: for each order the pair table contributes
+one row per seller state, so the excess is `SUM(seller_state_count − 1) = 516` over the 509
+multi-state orders.
+
 Within a pair, the timing figures are the **order-level purchase-to-delivery time associated
 with that state pair**. They describe how long those orders took overall, not the shipping time
 of an individual item or a leg of the journey.
@@ -122,18 +126,24 @@ median and 14.07% arrive late.
 | Sellers with missing state | 0 | 0 | ✅ |
 | Order/state-pair rows | 96,994 | ≥ 96,478 (overlap) | ✅ |
 | Distinct pair keys | 96,994 | equals row count | ✅ |
+| Distinct seller-state / buyer-state pairs | 412 | reported | ✅ |
+| Same-state order/state-pair rows | 34,827 | reported | ✅ |
+| Cross-state order/state-pair rows | 62,167 | reported | ✅ |
+| Extra pair rows (`96,994 − 96,478`) | 516 | reported | ✅ |
+| `SUM(seller_state_count − 1)` over multi-state orders | 516 | equals extra rows | ✅ |
+| Overall late rate | 6.77% | 6,534 ÷ 96,470 | ✅ |
 | Multi-state orders | 509 | reported | ✅ |
 | Distinct orders inside pairs | 96,478 | 96,478 | ✅ |
 | Eligible orders missing from pairs | 0 | 0 | ✅ |
 
 Buyer-state totals reconcile to the validated baseline of 96,478 delivered and 96,470 eligible
 orders with no unknown-state bucket. Late orders reconcile to the 6,534 baseline from the
-delivery-versus-reviews analysis, because eligibility matches exactly. The pair table adds 516
-rows purely from the 509 multi-state orders — each adds one row per additional seller state —
-and every pair key is unique, so no join has duplicated an order inside a pair.
+delivery-versus-reviews analysis, because eligibility matches exactly.
 
-**Why pair counts differ from order counts.** 96,994 − 96,478 = 516 extra rows. Interpret pair
-counts as "orders involving this state pair", never as a partition of all orders.
+The pair table adds 516 rows purely from the 509 multi-state orders: each such order contributes
+one row per seller state, so the excess equals `SUM(seller_state_count − 1) = 516`. Every pair
+key is unique, so no join has duplicated an order inside a pair. Interpret pair counts as "orders
+involving this state pair", never as a partition of all orders.
 
 ## 5. Limitations
 
@@ -162,14 +172,15 @@ and Minas Gerais (4.57%, n = 11,354) combine large volumes with low late rates.
 (26 days) yet only 2.76% of its 145 orders arrived late, and Rondônia has an 18-day median with
 2.88% late, because the promised dates for those destinations are correspondingly long. Rio de
 Janeiro, with a shorter 12-day median, still runs 12.11% late. Late rate measures whether the
-estimate was met, not how far away the buyer is.
+estimate was met, not how far away the buyer is. The cause of these differences was not tested
+in this analysis.
 
-**Distance between seller and buyer state is associated with slower delivery.** Same-state pairs
-are the fastest in the output — RJ→RJ 5-day median, RS→RS 6, SP→SP and MG→MG and PR→PR 7 — while
-the large cross-country pairs take far longer: SP→RJ a 13-day median and 14.07% late over 8,188
-orders, SP→BA 18 days, SP→PA 21 days, and SP→MA 20 days with a 19.07% late rate over 493 orders.
-These are observed associations between state pairs and timing; they do not identify the cause
-of the delay.
+**Seller-to-buyer state pairs show large timing differences.** As examples of same-state pairs,
+RJ→RJ has a 5-day median, RS→RS 6 days, and SP→SP, MG→MG and PR→PR 7 days. As examples of
+cross-state pairs, SP→RJ has a 13-day median with 14.07% late over 8,188 orders, SP→BA 18 days,
+SP→MA 20 days with 19.07% late over 493 orders, and SP→PA 21 days. These named pairs are
+illustrations, not a ranking: the script returns all 412 pairs, and small pairs are flagged by
+their sample size. The cause of these differences was not tested in this analysis.
 
 ## 7. Reproduce
 

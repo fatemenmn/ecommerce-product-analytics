@@ -216,6 +216,25 @@ SELECT
         GROUP BY order_id HAVING COUNT(DISTINCT seller_state) > 1
      ) AS multi)                                                    AS multi_seller_state_orders,
     (SELECT COUNT(DISTINCT order_id) FROM pairs)                   AS distinct_orders_in_pairs,
+    (SELECT COUNT(*) FROM (
+        SELECT DISTINCT seller_state, buyer_state FROM pairs
+     ) AS pair_groups)                                             AS distinct_pair_groups,
+    (SELECT COUNT(*) FROM pairs
+      WHERE seller_state = buyer_state)                            AS same_state_pair_rows,
+    (SELECT COUNT(*) FROM pairs
+      WHERE seller_state <> buyer_state)                           AS cross_state_pair_rows,
+    -- Overlap check: pair rows above the order count must equal the extra
+    -- seller states carried by multi-state orders, i.e. SUM(state_count - 1).
+    (SELECT COUNT(*) FROM pairs)
+        - (SELECT COUNT(DISTINCT order_id) FROM pairs)             AS extra_pair_rows,
+    (SELECT SUM(seller_state_count - 1)
+       FROM (SELECT order_id, COUNT(*) AS seller_state_count
+               FROM pairs
+              GROUP BY order_id
+             HAVING COUNT(*) > 1) AS multi)                        AS multi_state_extra_rows,
+    (SELECT ROUND(100.0 * SUM(is_eligible = 1 AND is_late = 1)
+                  / NULLIF(SUM(is_eligible), 0), 2)
+       FROM delivered_orders)                                      AS overall_late_rate_pct,
     (SELECT COUNT(*) FROM delivered_orders
       WHERE is_eligible = 1
         AND NOT EXISTS (SELECT 1 FROM pairs AS p
