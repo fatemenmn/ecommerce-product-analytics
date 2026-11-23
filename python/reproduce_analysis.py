@@ -7,8 +7,10 @@ What it does
 2. Delivery versus reviews: eligibility, review coverage, average score and the
    1-2 score rate by timing group, validated against sql/delivery_vs_reviews.sql.
 
-Both committed scripts are executed against the same MySQL connection, so the
-comparison is always against a fresh run of the SQL in the repository.
+Both committed scripts are executed on the same connection and the same
+database as the pandas queries: the standalone SQL files keep their documented
+`olist` references, and the script retargets those references to MYSQL_DATABASE
+at run time, so an alternate schema can be verified end to end.
 
 Business rules reproduced
 -------------------------
@@ -112,9 +114,26 @@ def read_source_tables(con) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     return orders, items, reviews
 
 
-def run_sql_file(con, path: Path) -> list[pd.DataFrame]:
-    """Execute every statement in a committed SQL file and return its results."""
-    statements = split_statements(path.read_text(encoding="utf-8"))
+def retarget_schema(sql: str, database: str) -> str:
+    """Point the committed SQL's `olist` references at `database`.
+
+    The SQL files stay runnable on their own exactly as documented (`USE olist;`
+    and `olist.<table>`). When the script targets another database through
+    MYSQL_DATABASE, those same references are retargeted so the Python metrics
+    and the SQL comparison read one and the same schema.
+    """
+    if database == "olist":
+        return sql
+    quoted = f"`{database}`"
+    return sql.replace("USE olist;", f"USE {quoted};").replace(
+        "olist.", f"{quoted}."
+    )
+
+
+def run_sql_file(con, path: Path, database: str) -> list[pd.DataFrame]:
+    """Execute a committed SQL file, retargeted to `database`, and return results."""
+    sql = retarget_schema(path.read_text(encoding="utf-8"), database)
+    statements = split_statements(sql)
     frames: list[pd.DataFrame] = []
     for stmt in statements:
         with con.cursor() as cur:
@@ -645,8 +664,8 @@ def main() -> int:
         py_groups, reviewed = compute_delivery_reviews(orders, reviews)
         print_table(py_groups)
 
-        sql_marketplace = run_sql_file(con, MARKETPLACE_SQL)[0]
-        sql_reviews = run_sql_file(con, REVIEWS_SQL)[0]
+        sql_marketplace = run_sql_file(con, MARKETPLACE_SQL, args.database)[0]
+        sql_reviews = run_sql_file(con, REVIEWS_SQL, args.database)[0]
     finally:
         con.close()
 
