@@ -79,8 +79,10 @@ are compared at the precision used in the reports (two decimals).
 
 `MYSQL_DATABASE` selects the database for **both** the pandas queries and the SQL reference
 comparisons. The committed SQL files keep their documented `olist` references and stay runnable
-on their own; the script retargets those references to the selected database at run time, so no
-file has to be edited or copied.
+on their own; before executing them the script removes the `USE olist;` directive and the `olist.`
+table qualifiers in memory, so every statement resolves against the database the connection has
+already selected. Comments and string literals are copied through untouched, and no file on disk
+is edited or copied.
 
 ```powershell
 $env:MYSQL_DATABASE = "olist_repro_test"
@@ -89,11 +91,11 @@ $env:MYSQL_PASSWORD = "<password>"
 python python\reproduce_analysis.py
 ```
 
-Use an account that can read only the target schema. That way an accidental reference to `olist`
-fails with `ERROR 1142` instead of silently passing. This was verified end to end: with a
-read-only account scoped to a freshly loaded temporary schema, `olist` access was denied and the
-run still reported 25 monthly rows, 96,478 delivered orders, R$ 13,221,498.11 delivered GMV and a
-53.15 percentage-point gap.
+Use an account that can read only the target schema, so any `olist` reference that survived the
+rewrite fails with `ERROR 1142` instead of silently reading the original tables. This was verified
+end to end: with a read-only account scoped to a freshly loaded temporary schema, `olist` access
+was denied and the run still reported 25 monthly rows, 96,478 delivered orders, R$
+13,221,498.11 delivered GMV and a 53.15 percentage-point gap.
 
 ## Actual reconciliation results
 
