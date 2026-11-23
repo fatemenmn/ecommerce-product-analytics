@@ -1,0 +1,71 @@
+// ===========================================================================
+// Olist order-level semantic model - Power BI milestone 1
+// Paste each block into Power BI Desktop as described in powerbi/README.md.
+// Measure format strings are set in Measure tools, not inside the formula.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// DimDate - calculated table (Modeling > New table)
+// One row per calendar date across the purchase-date range: 774 rows,
+// 2016-09-04 to 2018-10-17 for the validated dataset.
+// Afterwards: select DimDate > Table tools > Mark as date table > Date.
+// ---------------------------------------------------------------------------
+DimDate =
+ADDCOLUMNS (
+    CALENDAR ( MIN ( FactOrders[purchase_date] ), MAX ( FactOrders[purchase_date] ) ),
+    "Year", YEAR ( [Date] ),
+    "Quarter", "Q" & QUARTER ( [Date] ),
+    "Month Number", MONTH ( [Date] ),
+    "Month", FORMAT ( [Date], "MMMM" ),
+    "Month Short", FORMAT ( [Date], "MMM" ),
+    "Year-Month", FORMAT ( [Date], "YYYY-MM" )
+)
+
+
+// ---------------------------------------------------------------------------
+// Measures on FactOrders (select FactOrders > New measure, one at a time)
+// ---------------------------------------------------------------------------
+
+// Format: Whole number (#,##0)
+// Grain is one row per order_id, so COUNTROWS equals distinct placed orders.
+// All order statuses are kept, exactly like the "Placed orders" SQL column.
+Placed Orders =
+COUNTROWS ( FactOrders )
+
+
+// Format: Whole number (#,##0)
+// Mirrors sql/marketplace_performance.sql:
+//   COUNT(CASE WHEN o.order_status = 'delivered' THEN 1 END)
+Delivered Orders =
+CALCULATE ( COUNTROWS ( FactOrders ), FactOrders[order_status] = "delivered" )
+
+
+// Format: Currency, 2 decimals (R$ #,##0.00)
+// Mirrors: SUM(CASE WHEN order_status = 'delivered'
+//                   THEN merchandise_value ELSE 0 END)
+// merchandise_value is SUM(order_items.price): freight is excluded.
+// Orders without items contribute NULL, which SUM ignores - the same result
+// as the SQL COALESCE(i.merchandise_value, 0).
+Delivered GMV (BRL) =
+CALCULATE (
+    SUM ( FactOrders[merchandise_value] ),
+    FactOrders[order_status] = "delivered"
+)
+
+
+// Format: Currency, 2 decimals (R$ #,##0.00)
+// Numerator and denominator are both evaluated in the current filter context,
+// so slicing by month recalculates the average inside that month.
+Delivered AOV (BRL) =
+DIVIDE ( [Delivered GMV (BRL)], [Delivered Orders] )
+
+
+// Format: Percentage, 2 decimals (0.00%)
+// Mirrors docs/03_product_metrics.md section 5.4:
+//   canceled orders / all placed orders
+// DIVIDE returns blank when there are no placed orders instead of dividing by 0.
+Cancellation Rate =
+DIVIDE (
+    CALCULATE ( COUNTROWS ( FactOrders ), FactOrders[order_status] = "canceled" ),
+    [Placed Orders]
+)
