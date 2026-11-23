@@ -7,8 +7,12 @@ What it does
 2. Delivery versus reviews: eligibility, review coverage, average score and the
    1-2 score rate by timing group, validated against sql/delivery_vs_reviews.sql.
 
-Both committed scripts are executed against the same MySQL connection, so the
-comparison is always against a fresh run of the SQL in the repository.
+Both committed scripts are executed on the same connection and therefore the
+same database as the pandas queries. The standalone SQL files keep their
+documented `olist` references; in memory the script drops their `USE olist;`
+directive and `olist.` qualifiers so every statement resolves against the
+database already selected by the connection, which lets an alternate schema be
+verified end to end.
 
 Business rules reproduced
 -------------------------
@@ -34,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -50,6 +55,10 @@ from load_mysql import connect, load_env_file, split_statements  # noqa: E402
 IMAGES = ROOT / "images"
 MARKETPLACE_SQL = ROOT / "sql" / "marketplace_performance.sql"
 REVIEWS_SQL = ROOT / "sql" / "delivery_vs_reviews.sql"
+
+# Schema the committed SQL files use when run standalone. The script never
+# reads it directly; it only removes references to it before execution.
+SOURCE_SCHEMA = "olist"
 
 BASELINE_DELIVERED = 96_478
 BASELINE_GMV = 13_221_498.11
@@ -112,9 +121,115 @@ def read_source_tables(con) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     return orders, items, reviews
 
 
+def strip_schema_references(sql: str, schema: str = SOURCE_SCHEMA) -> str:
+    """Drop a script's own schema selection so the connection's database wins.
+
+    The reference SQL files are runnable on their own and therefore open with
+    `USE olist;` and qualify their tables as `olist.<table>`. The PyMySQL
+    connection has already selected the database we want to read, so both the
+    `USE` directive and the qualifiers are removed in memory. Every statement
+    then resolves against the connection's current database, whatever
+    MYSQL_DATABASE points at.
+
+    Only SQL code is rewritten: comments and string literals are copied through
+    verbatim, so a header note such as `--database=olist` stays as written and
+    nothing inside quotes is touched. Quoted identifiers are code, so
+    `` `olist`.orders `` is rewritten too, but an identifier that merely
+    contains the schema name, such as `` `olist.orders` ``, is left alone.
+    The files on disk are never modified.
+    """
+    quoted_ident = re.compile(r"`(?:[^`]|``)*`")
+    use_stmt = re.compile(rf"\bUSE\s+`?{re.escape(schema)}`?\s*;", re.IGNORECASE)
+    qualifier = re.compile(
+        rf"(?<![\w$.])`?{re.escape(schema)}`?\s*\.", re.IGNORECASE
+    )
+
+    def rewrite(chunk: str, pattern: re.Pattern[str], anchor: str | None = None) -> str:
+        """Apply `pattern`, skipping matches that sit inside a quoted identifier.
+
+        The guard is anchored on `anchor` (the `.` of a qualifier) when given,
+        so `` `olist` `` .orders is rewritten while `` `olist.orders` `` — one
+        identifier whose name happens to contain the schema — is not.
+        """
+        spans = [(m.start(), m.end()) for m in quoted_ident.finditer(chunk)]
+
+        def replace(match: re.Match[str]) -> str:
+            text = match.group(0)
+            pos = match.start()
+            if anchor is not None and anchor in text:
+                pos += text.rindex(anchor)
+            if any(start < pos < end - 1 for start, end in spans):
+                return text  # inside a quoted identifier: keep it as written
+            return ""
+
+        return pattern.sub(replace, chunk)
+
+    out: list[str] = []
+    code: list[str] = []
+
+    def flush_code() -> None:
+        """Rewrite one contiguous run of SQL code."""
+        if not code:
+            return
+        chunk = "".join(code)
+        code.clear()
+        chunk = rewrite(chunk, use_stmt)
+        chunk = rewrite(chunk, qualifier, anchor=".")
+        out.append(chunk)
+
+    i, n = 0, len(sql)
+    while i < n:
+        ch = sql[i]
+        nxt = sql[i + 1] if i + 1 < n else ""
+
+        # Line comments: `-- ...` and `# ...`.
+        if (ch == "-" and nxt == "-") or ch == "#":
+            flush_code()
+            end = sql.find("\n", i)
+            end = n if end == -1 else end
+            out.append(sql[i:end])
+            i = end
+            continue
+
+        # Block comments.
+        if ch == "/" and nxt == "*":
+            flush_code()
+            end = sql.find("*/", i + 2)
+            end = n if end == -1 else end + 2
+            out.append(sql[i:end])
+            i = end
+            continue
+
+        # String literals.
+        if ch in ("'", '"'):
+            flush_code()
+            j = i + 1
+            while j < n:
+                if sql[j] == "\\":
+                    j += 2  # backslash escape inside a string literal
+                    continue
+                if sql[j] == ch:
+                    if j + 1 < n and sql[j + 1] == ch:
+                        j += 2  # doubled quote inside a literal
+                        continue
+                    j += 1
+                    break
+                j += 1
+            out.append(sql[i:j])
+            i = j
+            continue
+
+        code.append(ch)
+        i += 1
+
+    flush_code()
+    return "".join(out)
+
+
 def run_sql_file(con, path: Path) -> list[pd.DataFrame]:
-    """Execute every statement in a committed SQL file and return its results."""
-    statements = split_statements(path.read_text(encoding="utf-8"))
+    """Execute a committed SQL file on the connection's current database."""
+    sql = strip_schema_references(path.read_text(encoding="utf-8"))
+    statements = split_statements(sql)
     frames: list[pd.DataFrame] = []
     for stmt in statements:
         with con.cursor() as cur:
