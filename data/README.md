@@ -97,6 +97,15 @@ python python\load_mysql.py --load orders
 python python\load_mysql.py --tables
 ```
 
+`--create` reads its table definitions from [`sql/00_create_schema.sql`](../sql/00_create_schema.sql),
+which mirrors the validated schema: table and column names, data types, primary keys, indexes and
+engine were captured from `SHOW CREATE TABLE` on the imported tables. To test the whole workflow
+without touching an existing database, send it to a throwaway schema:
+
+```powershell
+python python\load_mysql.py --database olist_repro_test --create --load all
+```
+
 Loaded tables and row counts (verified against the source CSVs):
 
 | Table | CSV | Rows |
@@ -122,16 +131,21 @@ python python\load_mysql.py --host 127.0.0.1 --port 3306 --user root --password 
 
 | File | Purpose |
 |---|---|
-| `sql/00_create_schema.sql` | Database plus all nine table definitions |
-| `sql/01_load_customers.sql` | Server-side `LOAD DATA` variant for customers |
-| `sql/customers_queries.sql` | Customer-only analytical queries |
-| `sql/03_example_queries.sql` | 18 cross-table example queries (revenue, delivery, reviews, sellers) |
+| `sql/00_create_schema.sql` | Database plus all nine table definitions (read by `load_mysql.py --create`) |
+| `sql/data_exploration.sql` | Schema, row counts, nulls, ranges and relationship validation |
+| `sql/order_level_dataset.sql` | Order-level grain with items, payments and order-level review score |
+| `sql/marketplace_performance.sql` | Monthly delivered GMV, orders, AOV and cancellation |
+| `sql/customer_repeat_purchase.sql` | Repeat buyers, 90-day cohorts and time to second purchase |
+| `sql/category_seller_performance.sql` | Category and seller GMV contribution and concentration |
+| `sql/payments_and_freight.sql` | Payment methods, installments, AOV groups and freight ratios |
+| `sql/delivery_vs_reviews.sql` | Delivery timing and review scores |
+| `sql/delivery_by_state.sql` | Buyer-state and seller-to-buyer state delivery timing |
 
 Run a script without opening a client:
 
 ```powershell
-python python\load_mysql.py -f sql\03_example_queries.sql
-python python\load_mysql.py -f sql\03_example_queries.sql --out reports\example_results.csv
+python python\load_mysql.py -f sql\marketplace_performance.sql
+python python\load_mysql.py -f sql\delivery_by_state.sql --out reports\delivery_by_state.csv
 ```
 
 Or paste it straight into MySQL Workbench after connecting to `127.0.0.1:3306`.

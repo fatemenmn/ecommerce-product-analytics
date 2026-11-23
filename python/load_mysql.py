@@ -254,7 +254,9 @@ def create_schema(args: argparse.Namespace) -> None:
         cur.execute(f"USE `{args.database}`")
         created = 0
         for stmt in split_statements(ddl):
-            head = stmt.lstrip().upper()
+            # Strip leading comment lines so each statement can be classified
+            # even when the schema file documents a table above its DDL.
+            head = re.sub(r"^(?:\s*--[^\n]*\n)+", "", stmt).lstrip().upper()
             if head.startswith("CREATE DATABASE") or head.startswith("USE "):
                 continue  # handled above so any database name works
             cur.execute(stmt)
